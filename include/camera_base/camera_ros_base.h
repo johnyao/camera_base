@@ -9,6 +9,7 @@
 #include <camera_info_manager/camera_info_manager.h>
 #include <diagnostic_updater/publisher.h>
 #include <diagnostic_updater/diagnostic_updater.h>
+#include <std_srvs/Empty.h>
 
 namespace camera_base {
 
@@ -47,9 +48,11 @@ class CameraRosBase {
             prefix.empty() ? "image_raw" : (prefix + "/image_raw"),
             diagnostic_updater_,
             diagnostic_updater::FrequencyStatusParam(&fps_, &fps_, 0.1, 10),
-            diagnostic_updater::TimeStampStatusParam(-0.01, 0.1)) {
+            diagnostic_updater::TimeStampStatusParam(-0.01, 0.1)),
+        shutdown_flag_(false) {
     cnh_.param<std::string>("frame_id", frame_id_, cnh_.getNamespace());
     cnh_.param<std::string>("identifier", identifier_, "");
+    shutdown_service_ = pnh_.advertiseService("shutdown", &CameraRosBase::shutdownServiceCallback, this);
   }
 
   CameraRosBase() = delete;
@@ -76,6 +79,9 @@ class CameraRosBase {
    * @param time Acquisition time stamp
    */
   void PublishCamera(const ros::Time& time) {
+    if (shutdown_flag_)
+      ros::shutdown();
+
     const auto image_msg = boost::make_shared<sensor_msgs::Image>();
     const auto cinfo_msg =
         boost::make_shared<sensor_msgs::CameraInfo>(cinfo_mgr_.getCameraInfo());
@@ -109,6 +115,13 @@ class CameraRosBase {
   virtual bool Grab(const sensor_msgs::ImagePtr& image_msg,
                     const sensor_msgs::CameraInfoPtr& cinfo_msgs = nullptr) = 0;
 
+  bool shutdownServiceCallback(std_srvs::Empty::Request& req,
+                               std_srvs::Empty::Response& res) {
+    ROS_WARN("Received shutdown request.");
+    shutdown_flag_ = true;
+    return true;
+  }
+
  private:
   ros::NodeHandle pnh_;
   ros::NodeHandle cnh_;
@@ -120,6 +133,8 @@ class CameraRosBase {
   diagnostic_updater::TopicDiagnostic topic_diagnostic_;
   std::string frame_id_;
   std::string identifier_;
+  bool shutdown_flag_;
+  ros::ServiceServer shutdown_service_;
 };
 
 }  // namespace camera_base
