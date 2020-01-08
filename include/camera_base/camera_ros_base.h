@@ -5,6 +5,7 @@
 #include <sensor_msgs/Image.h>
 #include <sensor_msgs/CameraInfo.h>
 #include <sensor_msgs/image_encodings.h>
+#include <std_msgs/Float64.h>
 #include <image_transport/image_transport.h>
 #include <camera_info_manager/camera_info_manager.h>
 #include <diagnostic_updater/publisher.h>
@@ -49,7 +50,8 @@ class CameraRosBase {
             diagnostic_updater_,
             diagnostic_updater::FrequencyStatusParam(&fps_, &fps_, 0.1, 10),
             diagnostic_updater::TimeStampStatusParam(-0.01, 0.1)),
-        shutdown_flag_(false) {
+        shutdown_flag_(false),
+        time_offset_pub_(pnh_.advertise<std_msgs::Float64>("time_offset", 1)) {
     cnh_.param<std::string>("frame_id", frame_id_, cnh_.getNamespace());
     cnh_.param<std::string>("identifier", identifier_, "");
     shutdown_service_ = pnh_.advertiseService("shutdown", &CameraRosBase::shutdownServiceCallback, this);
@@ -96,6 +98,13 @@ class CameraRosBase {
     diagnostic_updater_.update();
   }
 
+  void PublishCameraAndOffset(const ros::Time& time, double offset) {
+    PublishCamera(time);
+    std_msgs::Float64 omsg;
+    omsg.data = offset;
+    time_offset_pub_.publish(omsg);
+  }
+
   void Publish(const sensor_msgs::ImagePtr& image_msg) {
     const auto cinfo_msg =
         boost::make_shared<sensor_msgs::CameraInfo>(cinfo_mgr_.getCameraInfo());
@@ -135,6 +144,7 @@ class CameraRosBase {
   std::string identifier_;
   bool shutdown_flag_;
   ros::ServiceServer shutdown_service_;
+  ros::Publisher time_offset_pub_;
 };
 
 }  // namespace camera_base
